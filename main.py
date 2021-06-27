@@ -5,6 +5,15 @@ import cv2
 import colorsys
 import matplotlib.pyplot as plt 
 
+CANVAS_WIDTH = 300
+CANVAS_HEIGHT = 300
+CANVAS_MARGIN = 300//3
+RECT_MIN_WIDTH = 50
+RECT_MAX_WIDTH = 100
+RECT_MIN_HEIGHT = 50
+RECT_MAX_HEIGHT = 100
+IOU_MIN = 0.04
+IOU_MAX = 0.07
 
 def cal_iou(rect1, rect2):
     # rect : left, top, width, height
@@ -35,52 +44,61 @@ def read_file_path_list(main_dir):
     return file_path_list
 
 
-def get_random_pill():
-    width =  np.random.randint(50, 140)
-    height =  np.random.randint(50, 140)
+def get_random_rect():
+    width =  np.random.randint(RECT_MIN_WIDTH, RECT_MAX_WIDTH)
+    height =  np.random.randint(RECT_MIN_HEIGHT, RECT_MAX_HEIGHT)
 
-    x = np.random.randint(0, 300 - width)
-    y = np.random.randint(0, 300 - height)
+    x = np.random.randint(CANVAS_MARGIN, CANVAS_WIDTH - width - CANVAS_MARGIN)
+    y = np.random.randint(CANVAS_MARGIN, CANVAS_HEIGHT - height - CANVAS_MARGIN)
 
     return x, y, width, height
 
 
-def get_random_pills(n):
-    pills = []
-    pills.append(get_random_pill())
+def get_random_rects(n):
+    rects = []
+    rects.append(get_random_rect())
 
-    back = np.zeros((300,300))
+    back = np.zeros((CANVAS_HEIGHT,CANVAS_WIDTH))
 
-    for pill in pills:
-        x, y, width, height = pill[0],pill[1],pill[2],pill[3]
-        back[x:x+width, y:y+height] = 1    
+    for rect in rects:
+        x, y, width, height = rect[0],rect[1],rect[2],rect[3]
+        back[y:y+height, x:x+width] = 1    
 
     for _ in range(n):
-        # plt.imshow(back)
-        # plt.show()
-        width =  np.random.randint(50, 100)
-        height =  np.random.randint(50, 100)
+       
+        width =  np.random.randint(RECT_MIN_WIDTH, RECT_MAX_HEIGHT)
+        height =  np.random.randint(RECT_MIN_HEIGHT, RECT_MAX_HEIGHT)
 
-        non_zero_y, non_zero_x = np.nonzero(back)
+        zero_y, zero_x = np.where(back == 0)
+
+        zero_indices = list(range(len(zero_x)))
+        print('# zero_indices = ', len(zero_indices))
+        cv2.namedWindow('aa',0)
+        cv2.imshow('aa', back)
+        cv2.waitKey(1000)
         
         while True:   
             ious = 0   
-            idx = random.choice(range(len(non_zero_x)))
-            x = non_zero_x[idx]
-            y = non_zero_y[idx]
+            idx = random.choice(zero_indices)
+            x = zero_x[idx]
+            y = zero_y[idx]
 
-            if x + width < 300 and y + height < 300:
+            print('x, y, width, height = ', x, y, width, height)
+
+            if x + width < CANVAS_WIDTH and y + height < CANVAS_HEIGHT:
             
-                for pill in pills:
-                    iou = cal_iou(pill, [x, y, width, height])
+                for rect in rects:
+                    iou = cal_iou(rect, [x, y, width, height])
                     ious += iou  
                 print(ious)                              
-                if ious < 0.1:                
-                    back[x:x+width, y:y+height] = 1                          
-                    pills.append([x, y, width, height])
+                if ious > IOU_MIN and ious < IOU_MAX:                
+                    back[y:y+height, x:x+width,] = 1                          
+                    rects.append([x, y, width, height])
                     break
-
-    return pills
+            
+            zero_indices.remove(idx)
+           
+    return rects
 
 def convert_rectangle_to_polygon(x,y,width, height):
     xs = [x, x+width, x+width, x]
@@ -96,71 +114,36 @@ def random_color():
     return color
  
 
-def draw(backgroud, pills):
-    for pill in pills:        
+def draw(backgroud, rects):
+    for rect in rects:        
         color = random_color()
         print(color)
-        backgroud = cv2.fillPoly(backgroud, [pill],  color)
+        backgroud = cv2.fillPoly(backgroud, [rect],  color)
     
     cv2.namedWindow('aa',0)
     cv2.imshow('aa', backgroud)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-def random_rotate_and_shfit(x, y, width, height):
-    margin = 30
 
-    angle = np.random.randint(0, 360)
-    rad = np.radians(angle)
-    cos = np.cos(rad)
-    sin = np.sin(rad)   
-    sx = np.random.randint(margin, 300 - width - margin)
-    sy = np.random.randint(margin, 300 - height - margin)
+if __name__=='__main__':
 
-    cx = (x + width)/2
-    cy = (y + height)/2
+    for _ in range(10):
+        background = np.zeros((300,300,3), dtype='uint8')
 
-    pts = convert_rectangle_to_polygon(x, y, width, height)
+        rects = [] 
+        polys = []
+    
+        rects = get_random_rects(4)
 
-    pts_rs = []
+        for rect in rects:
+            poly = convert_rectangle_to_polygon(*rect)
+            polys.append(poly)
 
-    for i, xy in enumerate(pts):
-        x = xy[0]
-        y = xy[1]    
-        xx = cos * (x - cx) - sin * (y - cy) + sx
-        yy = sin * (x - cx) + cos * (y - cy) + sy
-        pts_rs.append([xx, yy])
-    return pts_rs 
-     
-
-background = np.zeros((300,300,3), dtype='uint8')
-
-rect_pills = [] 
-poly_pills = []
-poly_rs_pills = []
-
-# for _ in range(4):
-#     rect = get_random_pill()
-#     poly = convert_rectangle_to_polygon(*rect)
-#     poly_rs = random_rotate_and_shfit(*rect)
-
-#     rect_pills.append(rect)
-#     poly_pills.append(poly)
-#     poly_rs_pills.append(poly_rs)
-
-pills = get_random_pills(4)
-
-for pill in pills:
-    poly = convert_rectangle_to_polygon(*pill)
-    poly_pills.append(poly)
-
-draw(background.copy(), np.array(poly_pills))
-
-# draw(background.copy(), np.array(poly_pills))
-# draw(background.copy(), np.array(poly_rs_pills, dtype='int32'))
-
-iou = cal_iou([0,0,100,100], [50,50,100,100])
-print(iou)
+        draw(background.copy(), np.array(polys))
+      
+        iou = cal_iou([0,0,100,100], [50,50,100,100])
+        print(iou)
 
 
 
