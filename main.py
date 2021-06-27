@@ -12,8 +12,8 @@ RECT_MIN_WIDTH = 50
 RECT_MAX_WIDTH = 100
 RECT_MIN_HEIGHT = 50
 RECT_MAX_HEIGHT = 100
-SUM_IOUS_MIN = 0.04
-SUM_IOUS_MAX = 0.07
+SUM_IOUS_MIN = -1.0
+SUM_IOUS_MAX = 0.001
 
 def cal_iou(rect1, rect2):
     # rect : left, top, width, height
@@ -53,6 +53,12 @@ def get_random_rect():
 
     return x, y, width, height
 
+def get_random_rect2(rect):
+    width = rect[2]
+    height = rect[3]
+    x = np.random.randint(CANVAS_MARGIN, CANVAS_WIDTH - width)
+    y = np.random.randint(CANVAS_MARGIN, CANVAS_HEIGHT - height)
+    return x, y, width ,height
 
 def get_random_rects(n):
     rects = []
@@ -110,6 +116,63 @@ def get_random_rects(n):
            
     return rects
 
+
+def get_random_rects2(in_rects):
+    out_rects = []
+    # get first rect
+    out_rects.append(get_random_rect2(in_rects[0]))
+
+    back = np.zeros((CANVAS_HEIGHT,CANVAS_WIDTH))
+
+    # insert first rect in background
+    for out_rect in out_rects:
+        x, y, width, height = out_rect[0],out_rect[1],out_rect[2],out_rect[3]
+        back[y:y+height, x:x+width] = 1    
+
+    for in_rect in in_rects[1:]:
+
+        # get random width, height of other rects       
+        width =  in_rect[2]
+        height =  in_rect[3]
+
+        # get zero point in background
+        zero_y, zero_x = np.where(back == 0)
+       
+        # get indices of zeros points
+        zero_indices = list(range(len(zero_x)))
+        # print('# zero_indices = ', len(zero_indices))
+
+        # # check rects postions
+        # cv2.namedWindow('rects',0)
+        # cv2.imshow('rects', back)
+        # cv2.waitKey(1000) # ms
+        
+        while True:   
+            sum_ious = 0   
+            # get random index in zero positions
+            idx = random.choice(zero_indices)
+            x = zero_x[idx]
+            y = zero_y[idx]
+
+            # print('x, y, width, height = {0},{1},{2},{3}'.format(x, y, width, height))
+
+            # check rect size and position
+            if x + width < CANVAS_WIDTH and y + height < CANVAS_HEIGHT:
+                # calculate iou sum to adjust overlap for each rect
+                for out_rect in out_rects:
+                    iou = cal_iou(out_rect, [x, y, width, height])
+                    sum_ious += iou  
+                # print('sum ious = {0:.4f}'.format(sum_ious))    
+                                         
+                if sum_ious > SUM_IOUS_MIN and sum_ious < SUM_IOUS_MAX:                
+                    back[y:y+height, x:x+width,] = 1                          
+                    out_rects.append([x, y, width, height])
+                    break
+            # remove selected index before update
+            zero_indices.remove(idx)
+           
+    return out_rects
+
 def convert_rectangle_to_polygon(x,y,width, height):
     # rect(x, y, width, height) -> poly xs = [left, right, right, left], ys =[top, top, bottom, bottom]
     xs = [x, x+width, x+width, x]
@@ -144,6 +207,7 @@ if __name__=='__main__':
         rects = [] 
         polys = []
     
+
         rects = get_random_rects(4)
 
         for rect in rects:
